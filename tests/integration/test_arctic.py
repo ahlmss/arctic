@@ -343,7 +343,6 @@ def test_disable_cache_by_settings(arctic):
 
     # Should be enabled by default
     assert arctic._list_libraries_cached() == arctic._list_libraries()
-
     arctic._cache.set_caching_state(enabled=False)
 
     # Should not return cached results now.

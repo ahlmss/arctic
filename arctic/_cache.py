@@ -10,9 +10,9 @@ CACHE_DB = 'meta_db'
 CACHE_SETTINGS = 'settings'
 CACHE_SETTINGS_KEY = 'cache'
 """
-Sample cache_settings collection entry:
-meta_db.cache_settings.insertOne({"type": "cache", "enabled": true, "cache_expiry": 600})
-meta_db.cache_settings.find(): { "_id" : ObjectId("5cd5388b9fddfbe6e968f11b"), "type": "cache", "enabled" : false, "cache_expiry" : 600 }
+Sample settings collection entry:
+meta_db.settings.insertOne({"type": "cache", "enabled": true, "cache_expiry": 600})
+meta_db.settings.find(): { "_id" : ObjectId("5cd5388b9fddfbe6e968f11b"), "type": "cache", "enabled" : false, "cache_expiry" : 600 }
 """
 DEFAULT_CACHE_EXPIRY = 3600
 
@@ -46,7 +46,7 @@ class Cache:
             logging.error("Enabled should be a boolean type.")
             return
 
-        if CACHE_SETTINGS not in self._cachedb.list_collection_names():
+        if (CACHE_SETTINGS not in self._cachedb.list_collection_names()) or self._cachedb[CACHE_SETTINGS].count() == 0:
             logging.info("Creating %s collection for cache settings" % CACHE_SETTINGS)
             self._cachedb[CACHE_SETTINGS].insert_one({
                 'type': CACHE_SETTINGS_KEY,
@@ -130,10 +130,7 @@ class Cache:
 
     def is_caching_enabled(self, cache_enabled_in_env):
         cache_settings = self._get_cache_settings()
-        # Caching is enabled unless explicitly disabled. Can be disabled either by an env variable or config in mongo.
-        if cache_settings and not cache_settings['enabled']:
-            return False
-        # Disabling from Mongo Setting take precedence over this env variable
-        if not cache_enabled_in_env:
-            return False
-        return True
+        # Explicitly setting the setting takes precedence over env.
+        if cache_settings:
+            return cache_settings['enabled']
+        return cache_enabled_in_env

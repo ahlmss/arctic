@@ -94,7 +94,7 @@ FORCE_BYTES_TO_UNICODE = bool(os.environ.get('FORCE_BYTES_TO_UNICODE'))
 # -------------------------------
 # Flag used for indicating caching levels. For now just for list_libraries.
 # -------------------------------
-ENABLE_CACHE = not bool(os.environ.get('ARCTIC_DISABLE_CACHE'))
+ENABLE_CACHE = bool(os.environ.get('ENABLE_CACHE'))
 
 # -------------------------------
 # Currently we try to bson encode if the data is less than a given size and store it in
