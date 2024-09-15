@@ -2,6 +2,7 @@ import hashlib
 import logging
 from collections import defaultdict
 from itertools import groupby
+import time
 
 import pymongo
 from bson.binary import Binary
@@ -12,7 +13,7 @@ from .date_chunker import DateChunker, START, END
 from .passthrough_chunker import PassthroughChunker
 from .._util import indent, mongo_count, enable_sharding
 from ..decorators import mongo_retry
-from ..exceptions import NoDataFoundException
+from ..exceptions import NoDataFoundException, ChunkStoreOutstandingTransaction
 from ..serialization.numpy_arrays import FrametoArraySerializer, DATA, METADATA, COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ LEN = 'l'
 SERIALIZER = 'se'
 CHUNKER = 'ch'
 USERMETA = 'u'
+TRANSACTION_START = 'ts'
 
 MAX_CHUNK_SIZE = 15 * 1024 * 1024
 
@@ -75,6 +77,8 @@ class ChunkStore(object):
                                   (START, pymongo.ASCENDING),
                                   (END, pymongo.ASCENDING)],
                                  unique=True, background=True)
+        self._trans.create_index([(SYMBOL, pymongo.ASCENDING)],
+                                 unique=True, background=True)
 
     def __init__(self, arctic_lib):
         self._arctic_lib = arctic_lib
@@ -91,6 +95,7 @@ class ChunkStore(object):
         self._symbols = self._collection.symbols
         self._mdata = self._collection.metadata
         self._audit = self._collection.audit
+        self._trans = self._collection.transactions
 
     def __getstate__(self):
         return {'arctic_lib': self._arctic_lib}
@@ -155,6 +160,7 @@ class ChunkStore(object):
             self._collection.delete_many(query)
             self._symbols.delete_many(query)
             self._mdata.delete_many(query)
+            self._trans.delete_many(query)
 
         if audit is not None:
             audit['symbol'] = symbol
@@ -254,6 +260,11 @@ class ChunkStore(object):
         if not sym:
             raise NoDataFoundException('No data found for %s' % (symbol))
 
+        for s in symbol:
+            transaction = self._trans.find_one({SYMBOL: s})
+            if transaction:
+                raise ChunkStoreOutstandingTransaction("Pending transaction on {}".format(s))
+
         spec = {SYMBOL: {'$in': symbol}}
         chunker = CHUNKER_MAP[sym[0][CHUNKER]]
         deser = SER_MAP[sym[0][SERIALIZER]].deserialize
@@ -330,6 +341,10 @@ class ChunkStore(object):
         if not isinstance(item, (DataFrame, Series)):
             raise Exception("Can only chunk DataFrames and Series")
 
+        transaction = self._trans.find_one({SYMBOL: symbol})
+        if transaction:
+            raise ChunkStoreOutstandingTransaction("Pending transaction on {}".format(symbol))
+
         self._arctic_lib.check_quota()
 
         previous_shas = []
@@ -350,8 +365,12 @@ class ChunkStore(object):
         ops = []
         meta_ops = []
         chunk_count = 0
-
+        trans_start = None
+        trans_end = None
         for start, end, chunk_size, record in chunker.to_chunks(item, **kwargs):
+            if trans_start is None:
+                trans_start = start
+            trans_end = end
             chunk_count += 1
             data = self.serializer.serialize(record)
             doc[CHUNK_SIZE] = chunk_size
@@ -382,6 +401,8 @@ class ChunkStore(object):
                     # already exists, dont need to update in mongo
                     previous_shas.remove(chunk[SHA])
 
+        # Start transaction
+        mongo_retry(self._trans.insert_one)({SYMBOL: symbol, START: trans_start, END: trans_end, TRANSACTION_START: time.time()})
         if ops:
             self._collection.bulk_write(ops, ordered=False)
         if meta_ops:
@@ -401,6 +422,9 @@ class ChunkStore(object):
             audit['action'] = 'write'
             audit['chunks'] = chunk_count
             self._audit.insert_one(audit)
+        # end transaction
+        mongo_retry(self._trans.delete_many)({SYMBOL: symbol})
+
 
     def __update(self, sym, item, metadata=None, combine_method=None, chunk_range=None, audit=None):
         '''
@@ -427,7 +451,12 @@ class ChunkStore(object):
 
         appended = 0
         new_chunks = 0
+        trans_start = None
+        trans_end = None
         for start, end, _, record in chunker.to_chunks(item, chunk_size=sym[CHUNK_SIZE]):
+            trans_end = end
+            if trans_start is None:
+                trans_start = start
             # read out matching chunks
             df = self.read(symbol, chunk_range=chunker.to_range(start, end), filter_data=False)
             # assuming they exist, update them and store the original chunk
@@ -476,6 +505,9 @@ class ChunkStore(object):
                                                    START: start,
                                                    END: end},
                                                   {'$set': meta}, upsert=True))
+
+        # Start transaction
+        mongo_retry(self._trans.insert_one)({SYMBOL: symbol, START: trans_start, END: trans_end, TRANSACTION_START: time.time()})
         if ops:
             self._collection.bulk_write(ops, ordered=False)
             self._mdata.bulk_write(meta_ops, ordered=False)
@@ -488,6 +520,8 @@ class ChunkStore(object):
             if appended > 0:
                 audit['appended_rows'] = appended
             self._audit.insert_one(audit)
+        # end transaction
+        mongo_retry(self._trans.delete_many)({SYMBOL: symbol})
 
     def append(self, symbol, item, upsert=False, metadata=None, audit=None, **kwargs):
         """
@@ -753,3 +787,26 @@ class ChunkStore(object):
         bool
         """
         return self._get_symbol_info(symbol) is not None
+
+    def transaction_recover(self, symbol):
+        """
+        Remove partially written data in a failed transaction.
+
+        Will do nothing if transaction or symbol does not exist.
+
+        Parameters
+        ----------
+        symbol: str
+        """
+        sym = self._get_symbol_info(symbol)
+        trans = self._trans.find_one({SYMBOL: symbol})
+        if trans:
+            start = trans[START]
+            end = trans[END]
+
+            query = {SYMBOL: symbol}
+            date_range = CHUNKER_MAP[sym[CHUNKER]].to_range(start, end)
+            query.update(CHUNKER_MAP[sym[CHUNKER]].to_mongo(date_range))
+            self._collection.delete_many(query)
+            self._mdata.delete_many(query)
+            self._trans.delete_many({SYMBOL: symbol})
