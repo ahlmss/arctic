@@ -172,7 +172,7 @@ class ChunkStore(object):
 
         Parameters
         ----------
-        partial: None or str
+        partial_match: None or str
             if not none, use this string to do a partial match on symbol names
 
         Returns

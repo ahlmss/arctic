@@ -58,7 +58,7 @@ class PyTest(TestCommand):
 
 setup(
     name="arctic",
-    version="1.82.1",
+    version="1.83.1",
     author="Man AHL Technology",
     author_email="arctic@man.com",
     description=("AHL Research Versioned TimeSeries and Tick store"),
@@ -77,8 +77,8 @@ setup(
                       "mock",
                       "mockextras",
                       "pandas",
-                      "numpy<2",
-                      "pymongo>=3.6.0, <= 3.13.0",
+                      "numpy",
+                      "pymongo<4",
                       "pytz",
                       "tzlocal",
                       "lz4",

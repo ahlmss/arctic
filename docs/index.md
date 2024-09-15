@@ -1,18 +1,14 @@
+!!! important "Important"
+    ## ArcticDB
+
+    [ArcticDB](https://arcticdb.io/#arctic1) is a ground-up rewrite of Arctic.<br>
+    The old Arctic, described below, is in maintenance mode.<br>
+    ArcticDB uses a very similar api to Arctic and is much faster.
+    
+    Take a look:<br>
+    [Website](https://arcticdb.io/#arctic1), [Docs](https://docs.arcticdb.io/latest/#arctic1), [GitHub](https://github.com/man-group/arcticdb)
+
 # Arctic Introduction
-
-## ArcticDB
-
-[ArcticDB](https://www.man.com/man-group-brings-powerful-dataframe-database-product-arcticdb-to-market-with-bloomberg), Man Group's high-performance Python-native
-DataFrame database is available on [GitHub](https://github.com/man-group/arcticdb).
-
-ArcticDB is the next generation of Arctic and is designed to be a drop-in replacement for it.
-
-These docs **do not describe ArcticDB**, but instead the older (first) version of the Arctic platform.
-The docs for ArcticDB are available [here](docs.arcticdb.io).
-
-If you would like information on ArcticDB please see the [website](arcticdb.io).
-
-The rest of these docs describe the first-generation Arctic platform.
 
 ## Arctic
 

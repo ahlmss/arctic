@@ -8,6 +8,9 @@ repo_name: 'arctic'
 repo_url: 'https://github.com/man-group/arctic'
 edit_uri: edit/master/docs/
 
+markdown_extensions:
+  - admonition
+
 theme:
   name: 'readthedocs'
 
