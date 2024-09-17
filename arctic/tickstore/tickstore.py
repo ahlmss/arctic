@@ -100,7 +100,7 @@ class TickStore(object):
 
     @classmethod
     def initialize_library(cls, arctic_lib, **kwargs):
-        TickStore(arctic_lib)._ensure_index()
+        TickStore(arctic_lib, **kwargs)._ensure_index()
 
     @mongo_retry
     def _ensure_index(self):
