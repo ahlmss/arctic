@@ -77,7 +77,6 @@ def test_ArcticTransaction_writes_if_metadata_changed():
 
 
 def test_ArcticTransaction_writes_if_base_data_corrupted():
-
     vs = Mock(spec=VersionStore)
     ts1 = pd.DataFrame(index=[1, 2], data={'a': [1.0, 2.0]})
     vs.read.side_effect = OperationFailure('some failure')
@@ -109,7 +108,7 @@ def test_ArcticTransaction_writes_no_data_found():
 
     assert vs.write.call_args_list == [call(sentinel.symbol, ANY, prune_previous_version=True, metadata={1: 2})]
     assert vs.list_versions.call_args_list == [call(sentinel.symbol, latest_only=True),
-                                              call(sentinel.symbol)]
+                                               call(sentinel.symbol)]
 
 
 def test_ArcticTransaction_writes_no_data_found_deleted():
@@ -146,19 +145,20 @@ def test_ArcticTransaction_does_nothing_when_data_not_modified():
     assert not vs.write.called
 
 
-def test_ArcticTransaction_does_nothing_when_data_is_None():
+def test_ArcticTransaction_does_write_when_new_data_is_None():
     vs = Mock(spec=VersionStore)
     ts1 = pd.DataFrame(index=[1, 2], data={'a': [1.0, 2.0]})
     vs.read.return_value = VersionedItem(symbol=sentinel.symbol, library=sentinel.library, version=1, metadata=None,
                                          data=ts1, host=sentinel.host)
     vs.write.return_value = VersionedItem(symbol=sentinel.symbol, library=sentinel.library, version=2,
                                           metadata=None, data=None, host=sentinel.host)
-    vs.list_versions.return_value = [{'version': 1}, {'version': 2}]
+    vs.list_versions.return_value = [{'version': 2}, {'version': 1}]
 
     with ArcticTransaction(vs, sentinel.symbol, sentinel.user, sentinel.log) as cwb:
-        pass
+        cwb.write(sentinel.symbol, None, metadata={1: 2})
+
     assert not vs._delete_version.called
-    assert not vs.write.called
+    assert vs.write.call_args_list == [call(sentinel.symbol, None, prune_previous_version=True, metadata={1: 2})]
 
 
 def test_ArcticTransaction_guards_against_inconsistent_ts():

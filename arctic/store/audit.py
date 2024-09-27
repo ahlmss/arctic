@@ -120,10 +120,9 @@ class ArcticTransaction(object):
         Records a write request to be actioned on context exit. Takes exactly the same parameters as the regular
         library write call.
         """
-        if data is not None:
-            # We only write data if existing data is None or the Timeseries data has changed or metadata has changed
-            if self.base_ts.data is None or not are_equals(data, self.base_ts.data) or metadata != self.base_ts.metadata:
-                self._do_write = True
+        # We only write data if existing data is None or the Timeseries data has changed or metadata has changed
+        if self.base_ts.data is None or not are_equals(data, self.base_ts.data) or metadata != self.base_ts.metadata:
+            self._do_write = True
         self._write = partial(self._version_store.write, symbol, data, prune_previous_version=prune_previous_version,
                               metadata=metadata, **kwargs)
 

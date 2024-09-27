@@ -141,3 +141,27 @@ def test_copy_data_doesnt_exist(arctic, mongo_host):
     assert logger.info.call_args_list == [call('Copying data from %s -> %s' % (src_host, dest_host)),
                                           call('Copying: 0 symbols')]
     assert logger.warn.call_args_list == [call('No symbols found that matched those provided.')]
+
+@pytest.mark.parametrize('source_ts', [read_str_as_pandas("""             times | near"""), None])
+def test_copy_empty_data(arctic, mongo_host, source_ts):
+    src = 'user.library'
+    dest = 'user.library2'
+    # Put ts, ts1 in library
+    arctic[src].write('some_ts', source_ts)
+
+    # Put some other value for ts in library2
+    arctic[dest].write('some_ts', ts)
+
+    # Create the user against the current mongo database
+    src_host = src + '@' + mongo_host
+    dest_host = dest + '@' + mongo_host
+    with patch('arctic.scripts.arctic_copy_data.logger') as logger:
+        run_as_main(mcd.main, '--src', src_host, '--dest', dest_host, '--log', 'CR101', '--splice', 'some_ts')
+
+    assert_frame_equal(ts, arctic[dest].read('some_ts').data)
+    assert logger.info.call_args_list == [call('Copying data from %s -> %s' % (src_host, dest_host)),
+                                          call('Copying: 1 symbols')]
+    assert logger.warn.call_args_list == [call('Symbol: some_ts already exists in destination, splicing in new data')]
+
+    # As the destination data is unchanged, no writing takes place and the audit log is empty.
+    assert len(arctic[dest].read_audit_log('some_ts')) == 0
