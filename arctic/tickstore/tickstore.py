@@ -218,6 +218,7 @@ class TickStore(object):
                     chunk = self._collection.find_one({'s': candidate['start'], 'sy': candidate['_id']}, {'e': 1})
                     if chunk['e'].replace(tzinfo=mktz('UTC')) >= start:
                         start_range['$gte'] = candidate['start'].replace(tzinfo=mktz('UTC'))
+                        first_dt = start_range['$gte']
                         break
             except StopIteration:
                 pass
